@@ -1,1 +1,9 @@
 Gerrit review tree viewer
+
+TODO:
+- Output options
+  - JSON
+  - HTML
+  - Graphviz
+- Order by tree depth
+- Argparse to specify queries besides Solum
