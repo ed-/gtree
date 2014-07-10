@@ -4,8 +4,6 @@ import json
 import operator
 import urllib2
 
-BASE_URL = "https://review.openstack.org"
-
 def fetch_json_data(url):
     try:
         U = urllib2.urlopen(url)
@@ -14,9 +12,9 @@ def fetch_json_data(url):
     except urllib2.HTTPError:
         return {}
 
-def fetch_open_reviews():
-    URL = "%s/changes/?q=status:open+solum" % BASE_URL
-    return fetch_json_data(URL)
+def fetch_open_reviews(base_url, project):
+    url = "%s/changes/?q=status:open+%%s" % base_url
+    return fetch_json_data(url % project)
 
 
 class Review(object):
@@ -25,13 +23,13 @@ class Review(object):
     parent_subject = None
     children = None
 
-    def __init__(self, review_dict):
+    def __init__(self, review_dict, base_url):
         self.owner = review_dict['owner']['name']
         self.subject = review_dict['subject']
 
         review_id = review_dict['id']
-        URL = "%s/changes/%%s/detail?o=current_revision&o=current_commit" % BASE_URL
-        details = fetch_json_data(URL % review_id)
+        url = "%s/changes/%%s/detail?o=current_revision&o=current_commit" % base_url
+        details = fetch_json_data(url % review_id)
 
         current_revision = details.get('current_revision')
         current_revision = details.get('revisions', {}).get(current_revision)
@@ -60,8 +58,9 @@ class Review(object):
             return 0
         return 1 + max([c.depth for c in self.children])
 
-def show_review_tree():
-    reviews = [Review(r) for r in fetch_open_reviews()]
+def show_review_tree(baseurl, project):
+    reviews = [Review(r, baseurl)
+               for r in fetch_open_reviews(baseurl, project)]
     subjects = [r.subject for r in reviews]
     children = [r for r in reviews if r.parent_subject in subjects]
     children.sort(key=operator.attrgetter('depth'))
@@ -79,4 +78,10 @@ def show_review_tree():
         print r.tree()
 
 if __name__ == '__main__':
-    show_review_tree()
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--project', default='solum')
+    ap.add_argument('--baseurl', default='https://review.openstack.org')
+    parsed = ap.parse_args()
+
+    show_review_tree(parsed.baseurl, parsed.project)
