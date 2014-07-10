@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 
 import json
+import operator
 import urllib2
+
+BASE_URL = "https://review.openstack.org"
 
 def fetch_json_data(url):
     try:
@@ -12,47 +15,68 @@ def fetch_json_data(url):
         return {}
 
 def fetch_open_reviews():
-    URL = "https://review.openstack.org/changes/?q=status:open+solum"
+    URL = "%s/changes/?q=status:open+solum" % BASE_URL
     return fetch_json_data(URL)
 
-def fetch_review_detail(review):
-    review_id = review.get('id')
-    URL = "https://review.openstack.org/changes/%s/detail?o=current_revision&o=current_commit"
-    return fetch_json_data(URL % review_id)
 
-def get_parent_commit(review):
-    detail = fetch_review_detail(review)
-    current_revision = detail.get('current_revision')
-    current_revision = detail.get('revisions', {}).get(current_revision)
-    parents = current_revision.get('commit', {}).get('parents', [])
-    if not parents:
-        return None
-    return parents[0]['subject']
+class Review(object):
+    owner = None
+    subject = None
+    parent_subject = None
+    children = None
 
-def get_heritage(reviews):
-    subjects = set([r.get('subject') for r in reviews])
+    def __init__(self, review_dict):
+        self.owner = review_dict['owner']['name']
+        self.subject = review_dict['subject']
 
-    heritage = []
-    for review in reviews:
-        subject = review.get('subject')
-        parent = get_parent_commit(review)
-        if parent not in subjects:
-            parent = None
-        heritage.append((parent, subject))
-    return heritage
+        review_id = review_dict['id']
+        URL = "%s/changes/%%s/detail?o=current_revision&o=current_commit" % BASE_URL
+        details = fetch_json_data(URL % review_id)
 
-def build_tree(heritage, head=None):
-    tree = {}
-    children = [c for (p, c) in heritage if p == head]
-    for child in children:
-        tree[child] = build_tree(heritage, head=child)
-    return tree
+        current_revision = details.get('current_revision')
+        current_revision = details.get('revisions', {}).get(current_revision)
+        parents = current_revision.get('commit', {}).get('parents', [])
+        if parents:
+            self.parent_subject = parents[0]['subject']
 
-def print_tree(tree, prefix=''):
-    for commit, children in tree.items():
-        print "%s%s" % (prefix, commit)
-        if children:
-            print_tree(children, prefix + '  ')
+        self.children = []
+
+    def __str__(self):
+        return "%s (%s)" % (self.subject, self.owner)
+
+    def __repr__(self):
+        return str(self)
+
+    def tree(self, prefix=''):
+        headline = '%s%s' % (prefix, str(self))
+        if not self.children:
+            return headline
+        childlines = '\n'.join([c.tree(prefix + '  ') for c in self.children])
+        return '%s\n%s' % (headline, childlines)
+
+    @property
+    def depth(self):
+        if not self.children:
+            return 0
+        return 1 + max([c.depth for c in self.children])
+
+def show_review_tree():
+    reviews = [Review(r) for r in fetch_open_reviews()]
+    subjects = [r.subject for r in reviews]
+    children = [r for r in reviews if r.parent_subject in subjects]
+    children.sort(key=operator.attrgetter('depth'))
+    while children:
+        child = children[0]
+        reviews.remove(child)
+        parent = [r for r in reviews if r.subject == child.parent_subject][0]
+        parent.children.append(child)
+
+        subjects = [r.subject for r in reviews]
+        children = [r for r in reviews if r.parent_subject in subjects]
+        children.sort(key=operator.attrgetter('depth'))
+    reviews = sorted(reviews, key=operator.attrgetter('depth'), reverse=True)
+    for r in reviews:
+        print r.tree()
 
 if __name__ == '__main__':
-    print_tree(build_tree(get_heritage(fetch_open_reviews())))
+    show_review_tree()
