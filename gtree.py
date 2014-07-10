@@ -22,10 +22,14 @@ class Review(object):
     subject = None
     parent_subject = None
     children = None
+    number = None
+    baseurl = None
 
     def __init__(self, review_dict, base_url):
         self.owner = review_dict['owner']['name']
         self.subject = review_dict['subject']
+        self.baseurl = base_url
+        self.number = review_dict['_number']
 
         review_id = review_dict['id']
         url = "%s/changes/%%s/detail?o=current_revision&o=current_commit" % base_url
@@ -40,7 +44,7 @@ class Review(object):
         self.children = []
 
     def __str__(self):
-        return "%s (%s)" % (self.subject, self.owner)
+        return "%s (%s) - %s" % (self.subject, self.owner, self.url)
 
     def __repr__(self):
         return str(self)
@@ -57,6 +61,10 @@ class Review(object):
         if not self.children:
             return 0
         return 1 + max([c.depth for c in self.children])
+
+    @property
+    def url(self):
+        return "%s/#/c/%s/" % (self.baseurl, self.number)
 
 def show_review_tree(baseurl, project):
     reviews = [Review(r, baseurl)
