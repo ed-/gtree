@@ -52,7 +52,8 @@ class Review(object):
     def tree(self, prefix=''):
         headline = '%s%s' % (prefix, str(self))
         if not self.children:
-            return headline
+            newline = '\n' if prefix else ''
+            return '%s%s' % (headline, newline)
         childlines = '\n'.join([c.tree(prefix + '  ') for c in self.children])
         return '%s\n%s' % (headline, childlines)
 
