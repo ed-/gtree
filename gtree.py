@@ -16,6 +16,10 @@ def fetch_open_reviews(base_url, project):
     url = "%s/changes/?q=status:open+%%s" % base_url
     return fetch_json_data(url % project)
 
+def fetch_merged_reviews(base_url, project):
+    url = "%s/changes/?q=status:merged+%%s" % base_url
+    return fetch_json_data(url % project)
+
 
 class Review(object):
     owner = None
@@ -75,8 +79,15 @@ def show_review_tree(baseurl, project):
     children.sort(key=operator.attrgetter('depth'))
     while children:
         child = children[0]
-        reviews.remove(child)
-        parent = [r for r in reviews if r.subject == child.parent_subject][0]
+        try:
+            reviews.remove(child)
+        except ValueError:
+            children.remove(child)
+            continue
+        if child.subject.startswith('Updated from global requirements'):
+            continue
+        parents = [r for r in reviews if r.subject == child.parent_subject]
+        parent = parents[0]
         parent.children.append(child)
 
         subjects = [r.subject for r in reviews]
@@ -86,11 +97,29 @@ def show_review_tree(baseurl, project):
     for r in reviews:
         print r.tree()
 
+def show_merge_stats(baseurl, project):
+    reviews = [Review(r, baseurl)
+               for r in fetch_merged_reviews(baseurl, project)]
+    owners = {}
+    for r in reviews:
+        owner = r.owner
+        owners[owner] = owners.get(owner, 0) + 1
+
+    print "Total merged: %i reviews" % len(reviews)
+    print
+    for o in sorted(owners):
+        print "%-30s: %3i" % (o, owners[o])
+
+
 if __name__ == '__main__':
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument('--project', default='solum')
     ap.add_argument('--baseurl', default='https://review.openstack.org')
+    ap.add_argument('--merged', action='store_true')
     parsed = ap.parse_args()
 
-    show_review_tree(parsed.baseurl, parsed.project)
+    if parsed.merged:
+        show_merge_stats(parsed.baseurl, parsed.project)
+    else:
+        show_review_tree(parsed.baseurl, parsed.project)

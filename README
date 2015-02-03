@@ -4,9 +4,10 @@ Fetch open reviews from review.openstack.org and display them
 as a plain text tree. Makes it easy to see which reviews depend
 on other reviews, so you can focus on the head of a chain first.
 
-usage: gtree.py [-h] [--project PROJECT] [--baseurl BASEURL]
+usage: gtree.py [-h] [--project PROJECT] [--baseurl BASEURL] [--merged]
 
 optional arguments:
   -h, --help         show this help message and exit
   --project PROJECT
   --baseurl BASEURL
+  --merged           show merge counts broken down by owner
